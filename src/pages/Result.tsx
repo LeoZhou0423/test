@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Download, Share2, RotateCcw, FileText, History, Briefcase, Heart, Target, Sparkles, TrendingUp, ChevronDown } from 'lucide-react';
+import { Download, Share2, RotateCcw, FileText, History, Briefcase, Heart, Target, Sparkles, TrendingUp, ChevronDown, Star, Brain, Shield, Zap } from 'lucide-react';
 import { RadarChart } from '@/components/RadarChart';
 import { DomainCard } from '@/components/DomainCard';
 import { useAppStore } from '@/store/useAppStore';
@@ -21,6 +21,8 @@ const LEVEL_COLORS: Record<string, string> = {
   high: 'bg-blue-100 text-blue-700',
   very_high: 'bg-purple-100 text-purple-700',
 };
+
+type TabKey = 'celebrity' | 'emotion' | 'cognitive' | 'career' | 'relationship' | 'stress' | 'growth';
 
 function FacetBar({ profile }: { profile: FacetProfile }) {
   const [expanded, setExpanded] = useState(false);
@@ -57,13 +59,27 @@ function FacetBar({ profile }: { profile: FacetProfile }) {
   );
 }
 
+function IndexBar({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium">{label}</span>
+        <span className="font-display text-sm font-bold">{value}</span>
+      </div>
+      <div className="mt-1 h-2 w-full border-2 border-[var(--border-color)] bg-[var(--bg-primary)]">
+        <div className={`h-full ${color} transition-all duration-500`} style={{ width: `${value}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export function Result() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { history, clearCurrentAnswers } = useAppStore();
   const reportRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'career' | 'relationship' | 'growth'>('career');
+  const [activeTab, setActiveTab] = useState<TabKey>('celebrity');
 
   const record = id
     ? history.find((r) => r.id === id)
@@ -119,6 +135,16 @@ export function Result() {
     clearCurrentAnswers();
     navigate('/quiz');
   };
+
+  const tabs: { key: TabKey; label: string; icon: typeof Star }[] = [
+    { key: 'celebrity', label: '名人匹配', icon: Star },
+    { key: 'emotion', label: '情绪画像', icon: Heart },
+    { key: 'cognitive', label: '认知与决策', icon: Brain },
+    { key: 'career', label: '职业匹配', icon: Briefcase },
+    { key: 'relationship', label: '人际动力学', icon: Zap },
+    { key: 'stress', label: '压力响应', icon: Shield },
+    { key: 'growth', label: '成长路径', icon: TrendingUp },
+  ];
 
   return (
     <main className="animate-fade-in-up px-3 py-6 sm:px-6 sm:py-10">
@@ -250,28 +276,192 @@ export function Result() {
 
             {/* ── 深度分析标签页 ── */}
             <div className="mt-8 border-t-2 border-[var(--border-color)] pt-6 sm:mt-10 sm:pt-8">
-              <div className="flex gap-1 border-b-2 border-[var(--border-color)]">
-                {[
-                  { key: 'career' as const, label: '职业匹配', icon: Briefcase },
-                  { key: 'relationship' as const, label: '人际动力学', icon: Heart },
-                  { key: 'growth' as const, label: '成长路径', icon: TrendingUp },
-                ].map(({ key, label, icon: Icon }) => (
+              <h2 className="font-display text-lg font-bold uppercase tracking-wide sm:text-xl">
+                深度人格分析
+              </h2>
+              <div className="mt-3 flex gap-1 overflow-x-auto border-b-2 border-[var(--border-color)] pb-0">
+                {tabs.map(({ key, label, icon: Icon }) => (
                   <button
                     key={key}
                     onClick={() => setActiveTab(key)}
-                    className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-bold uppercase transition-colors sm:text-sm ${
+                    className={`flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-[10px] font-bold uppercase transition-colors sm:text-xs ${
                       activeTab === key
                         ? 'border-[var(--accent-yellow)] text-[var(--text-primary)]'
                         : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                     }`}
                   >
-                    <Icon size={14} />
+                    <Icon size={12} />
                     {label}
                   </button>
                 ))}
               </div>
 
               <div className="mt-4 sm:mt-6">
+                {/* ── 名人匹配 ── */}
+                {activeTab === 'celebrity' && (
+                  <div className="animate-fade-in-up">
+                    <h3 className="font-display text-sm font-bold uppercase sm:text-base">与你人格最相似的名人</h3>
+                    <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                      基于五维度欧氏距离匹配，名人数据来源于公开人格研究与传记分析
+                    </p>
+                    <div className="mt-3 grid gap-3">
+                      {model.celebrityMatches.map((celeb, i) => (
+                        <div key={celeb.name} className="bauhaus-card-sm p-3 sm:p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-[var(--border-color)] bg-[var(--accent-yellow)] sm:h-12 sm:w-12">
+                              <span className="font-display text-lg font-bold sm:text-xl">{i + 1}</span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-display text-sm font-bold sm:text-base">{celeb.name}</h4>
+                                <span className="shrink-0 rounded bg-[var(--bg-alt)] px-1.5 py-0.5 text-[10px] font-bold uppercase">
+                                  {celeb.field}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-[var(--text-secondary)] sm:text-xs">{celeb.title}</p>
+                              <div className="mt-1.5 flex items-center gap-2">
+                                <span className="font-display text-lg font-bold sm:text-xl">{celeb.similarity}</span>
+                                <span className="text-[10px] text-[var(--text-secondary)]">% 相似度</span>
+                                <div className="flex-1">
+                                  <div className="h-2 w-full border-2 border-[var(--border-color)] bg-[var(--bg-primary)]">
+                                    <div
+                                      className="h-full bg-[var(--accent-yellow)] transition-all duration-500"
+                                      style={{ width: `${celeb.similarity}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                              <p className="mt-1 text-[10px] text-[var(--text-secondary)] sm:text-xs">{celeb.reason}</p>
+                              <p className="mt-1.5 border-l-2 border-[var(--accent-yellow)] pl-2 text-xs italic text-[var(--text-secondary)] sm:text-sm">
+                                「{celeb.quote}」
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── 情绪画像 ── */}
+                {activeTab === 'emotion' && (
+                  <div className="animate-fade-in-up">
+                    <h3 className="font-display text-sm font-bold uppercase sm:text-base">
+                      情绪基调：{model.emotionalProfile.dominantEmotion}
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed">
+                      {model.emotionalProfile.emotionalPattern}
+                    </p>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div className="bauhaus-card-sm p-3 sm:p-4">
+                        <IndexBar label="正面情绪倾向" value={model.emotionalProfile.positivity} color="bg-green-500" />
+                        <IndexBar label="负面情绪倾向" value={model.emotionalProfile.negativity} color="bg-red-500" />
+                      </div>
+                      <div className="bauhaus-card-sm p-3 sm:p-4">
+                        <IndexBar label="情绪波动幅度" value={model.emotionalProfile.emotionalRange} color="bg-purple-500" />
+                        <IndexBar label="情绪恢复力" value={model.emotionalProfile.emotionalResilience} color="bg-blue-500" />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div className="border-2 border-green-300 bg-green-50 p-3 sm:p-4 dark:bg-green-950/20">
+                        <h4 className="font-display text-xs font-bold uppercase text-green-700 sm:text-sm">情绪优势</h4>
+                        <ul className="mt-2 space-y-1">
+                          {model.emotionalProfile.emotionalStrengths.map((s) => (
+                            <li key={s} className="text-xs sm:text-sm">+ {s}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="border-2 border-orange-300 bg-orange-50 p-3 sm:p-4 dark:bg-orange-950/20">
+                        <h4 className="font-display text-xs font-bold uppercase text-orange-700 sm:text-sm">情绪挑战</h4>
+                        <ul className="mt-2 space-y-1">
+                          {model.emotionalProfile.emotionalChallenges.map((c) => (
+                            <li key={c} className="text-xs text-[var(--text-secondary)] sm:text-sm">! {c}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── 认知与决策 ── */}
+                {activeTab === 'cognitive' && (
+                  <div className="animate-fade-in-up">
+                    <h3 className="font-display text-sm font-bold uppercase sm:text-base">
+                      认知风格：{model.cognitiveStyle.thinkingMode}
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed">
+                      {model.cognitiveStyle.description}
+                    </p>
+
+                    <div className="mt-4 bauhaus-card-sm p-3 sm:p-4">
+                      <h4 className="font-display text-xs font-bold uppercase sm:text-sm">认知能力指数</h4>
+                      <div className="mt-3 space-y-3">
+                        <IndexBar label="创造力指数" value={model.cognitiveStyle.creativityIndex} color="bg-purple-500" />
+                        <IndexBar label="分析力指数" value={model.cognitiveStyle.analyticalIndex} color="bg-blue-500" />
+                        <IndexBar label="实践力指数" value={model.cognitiveStyle.practicalIndex} color="bg-green-500" />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div className="bauhaus-card-sm p-3 sm:p-4">
+                        <h4 className="font-display text-[10px] font-bold uppercase text-[var(--text-secondary)] sm:text-xs">信息加工方式</h4>
+                        <p className="mt-1 text-xs sm:text-sm">{model.cognitiveStyle.processingStyle}</p>
+                      </div>
+                      <div className="bauhaus-card-sm p-3 sm:p-4">
+                        <h4 className="font-display text-[10px] font-bold uppercase text-[var(--text-secondary)] sm:text-xs">学习风格</h4>
+                        <p className="mt-1 text-xs sm:text-sm">{model.cognitiveStyle.learningStyle}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 border-t-2 border-[var(--border-color)] pt-4">
+                      <h3 className="font-display text-sm font-bold uppercase sm:text-base">
+                        决策风格：{model.decisionStyle.style}
+                      </h3>
+                      <p className="mt-2 text-sm leading-relaxed">
+                        {model.decisionStyle.description}
+                      </p>
+
+                      <div className="mt-4 bauhaus-card-sm p-3 sm:p-4">
+                        <IndexBar label="风险容忍度" value={model.decisionStyle.riskTolerance} color="bg-orange-500" />
+                      </div>
+
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div className="bauhaus-card-sm p-3 sm:p-4">
+                          <h4 className="font-display text-[10px] font-bold uppercase text-[var(--text-secondary)] sm:text-xs">信息偏好</h4>
+                          <p className="mt-1 text-xs sm:text-sm">{model.decisionStyle.informationPreference}</p>
+                        </div>
+                        <div className="bauhaus-card-sm p-3 sm:p-4">
+                          <h4 className="font-display text-[10px] font-bold uppercase text-[var(--text-secondary)] sm:text-xs">速度偏好</h4>
+                          <p className="mt-1 text-xs sm:text-sm">{model.decisionStyle.speedBias}</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 bauhaus-card-sm p-3 sm:p-4">
+                        <h4 className="font-display text-[10px] font-bold uppercase text-[var(--text-secondary)] sm:text-xs">群体影响</h4>
+                        <p className="mt-1 text-xs sm:text-sm">{model.decisionStyle.groupInfluence}</p>
+                      </div>
+
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <div className="border-2 border-[var(--accent-red)] p-3 sm:p-4">
+                          <h4 className="font-display text-[10px] font-bold uppercase text-[var(--accent-red)] sm:text-xs">决策盲点</h4>
+                          <ul className="mt-2 space-y-1">
+                            {model.decisionStyle.blindSpots.map((b) => (
+                              <li key={b} className="text-xs text-[var(--text-secondary)] sm:text-sm">! {b}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="border-2 border-[var(--accent-blue)] p-3 sm:p-4">
+                          <h4 className="font-display text-[10px] font-bold uppercase text-[var(--accent-blue)] sm:text-xs">优化建议</h4>
+                          <p className="mt-2 text-xs leading-relaxed sm:text-sm">{model.decisionStyle.optimizationTip}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── 职业匹配 ── */}
                 {activeTab === 'career' && (
                   <div className="animate-fade-in-up">
                     <h3 className="font-display text-sm font-bold uppercase sm:text-base">职业匹配度排名</h3>
@@ -315,6 +505,7 @@ export function Result() {
                   </div>
                 )}
 
+                {/* ── 人际动力学 ── */}
                 {activeTab === 'relationship' && (
                   <div className="animate-fade-in-up">
                     <h3 className="font-display text-sm font-bold uppercase sm:text-base">
@@ -356,6 +547,64 @@ export function Result() {
                   </div>
                 )}
 
+                {/* ── 压力响应 ── */}
+                {activeTab === 'stress' && (
+                  <div className="animate-fade-in-up">
+                    <h3 className="font-display text-sm font-bold uppercase sm:text-base">
+                      压力响应模式：{model.stressResponse.stressType}
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed">
+                      {model.stressResponse.description}
+                    </p>
+
+                    <div className="mt-4 bauhaus-card-sm p-3 sm:p-4">
+                      <IndexBar label="倦怠风险" value={model.stressResponse.burnoutRisk} color={model.stressResponse.burnoutRisk > 60 ? 'bg-red-500' : model.stressResponse.burnoutRisk > 40 ? 'bg-orange-500' : 'bg-green-500'} />
+                    </div>
+
+                    <div className="mt-4 bauhaus-card-sm p-3 sm:p-4">
+                      <h4 className="font-display text-[10px] font-bold uppercase text-[var(--text-secondary)] sm:text-xs">压力触发因素</h4>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {model.stressResponse.stressTriggers.map((t) => (
+                          <span key={t} className="border-2 border-[var(--accent-red)] bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase text-red-700 dark:bg-red-950/20 sm:text-xs">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div className="bauhaus-card-sm p-3 sm:p-4">
+                        <h4 className="font-display text-[10px] font-bold uppercase text-[var(--text-secondary)] sm:text-xs">应对机制</h4>
+                        <p className="mt-1 text-xs leading-relaxed sm:text-sm">{model.stressResponse.copingMechanism}</p>
+                      </div>
+                      <div className="bauhaus-card-sm p-3 sm:p-4">
+                        <h4 className="font-display text-[10px] font-bold uppercase text-[var(--text-secondary)] sm:text-xs">恢复方式</h4>
+                        <p className="mt-1 text-xs leading-relaxed sm:text-sm">{model.stressResponse.recoveryStyle}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div className="border-2 border-green-300 bg-green-50 p-3 sm:p-4 dark:bg-green-950/20">
+                        <h4 className="font-display text-xs font-bold uppercase text-green-700 sm:text-sm">韧性因素</h4>
+                        <ul className="mt-2 space-y-1">
+                          {model.stressResponse.resilienceFactors.map((f) => (
+                            <li key={f} className="text-xs sm:text-sm">+ {f}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="border-2 border-orange-300 bg-orange-50 p-3 sm:p-4 dark:bg-orange-950/20">
+                        <h4 className="font-display text-xs font-bold uppercase text-orange-700 sm:text-sm">脆弱因素</h4>
+                        <ul className="mt-2 space-y-1">
+                          {model.stressResponse.vulnerabilityFactors.map((f) => (
+                            <li key={f} className="text-xs text-[var(--text-secondary)] sm:text-sm">! {f}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── 成长路径 ── */}
                 {activeTab === 'growth' && (
                   <div className="animate-fade-in-up">
                     <div className="border-2 border-[var(--accent-yellow)] bg-[var(--accent-yellow)]/5 p-4 sm:p-6">
@@ -423,8 +672,10 @@ export function Result() {
             <div className="mt-8 border-t-2 border-[var(--border-color)] pt-6 sm:mt-10 sm:pt-8">
               <h2 className="font-display text-sm font-bold uppercase sm:text-base">方法论说明</h2>
               <ul className="mt-2 space-y-1 text-xs text-[var(--text-secondary)] sm:text-sm">
-                <li>分数基于 BFI-2 常模（Soto & John, 2017）通过正态 CDF 转换为百分位，表示你在人群中的相对位置</li>
+                <li>分数基于 BFI-2 常模（Soto &amp; John, 2017）通过正态 CDF 转换为百分位，表示你在人群中的相对位置</li>
                 <li>人格原型基于五维度组合模式识别，共10种原型</li>
+                <li>名人匹配基于五维度欧氏距离计算，名人数据来源于公开人格研究与传记分析估计值</li>
+                <li>情绪效价、认知风格、压力响应、决策风格等模块基于维度交互效应建模</li>
                 <li>职业匹配基于理想剖面与容差算法，匹配度越高说明你的人格特质与该职业的典型从业者越相似</li>
                 <li>人格具有相对稳定性，但也会随年龄、经历和情境而变化。测试结果仅供参考，不构成临床诊断</li>
               </ul>

@@ -67,6 +67,11 @@ export interface PersonalityModel {
   relationshipDynamics: RelationshipDynamics;
   dominantTraits: string[];
   growthEdge: string;
+  celebrityMatches: CelebrityMatch[];
+  emotionalProfile: EmotionalProfile;
+  cognitiveStyle: CognitiveStyle;
+  stressResponse: StressResponse;
+  decisionStyle: DecisionStyle;
 }
 
 // ─── BFI-2 常模数据（基于 Soto & John 2017 的大样本均值与标准差近似值） ───
@@ -609,6 +614,482 @@ function identifyGrowthEdge(scores: DomainScores, facetProfiles: FacetProfile[])
   return growthMap[lowest.facet] || `你的${lowest.name}是当前最需要发展的领域，建议有针对性地练习和提升`;
 }
 
+// ─── 名人匹配引擎 ───
+
+export interface CelebrityMatch {
+  name: string;
+  title: string;       // 身份标签
+  field: string;       // 领域
+  similarity: number;  // 相似度 0-100
+  reason: string;      // 相似原因
+  quote: string;       // 名言
+}
+
+interface CelebrityProfile {
+  name: string;
+  title: string;
+  field: string;
+  profile: Record<Domain, number>; // 估计的百分位
+  quote: string;
+}
+
+// 基于公开人格研究、传记分析和专家评估的估计值
+const CELEBRITY_PROFILES: CelebrityProfile[] = [
+  { name: '爱因斯坦', title: '理论物理学家', field: '科学', profile: { O: 95, C: 70, E: 25, A: 45, N: 40 }, quote: '想象力比知识更重要' },
+  { name: '达芬奇', title: '文艺复兴全才', field: '艺术/科学', profile: { O: 98, C: 55, E: 35, A: 50, N: 45 }, quote: '学习永不厌倦' },
+  { name: '乔布斯', title: '科技企业家', field: '科技', profile: { O: 85, C: 65, E: 75, A: 25, N: 55 }, quote: '保持饥饿，保持愚蠢' },
+  { name: '居里夫人', title: '物理/化学家', field: '科学', profile: { O: 80, C: 90, E: 20, A: 60, N: 35 }, quote: '生活中没有什么可怕的东西，只有需要理解的东西' },
+  { name: '甘地', title: '非暴力抗争领袖', field: '政治', profile: { O: 65, C: 75, E: 55, A: 95, N: 30 }, quote: '成为你想在世界上看到的改变' },
+  { name: '奥普拉', title: '媒体女王', field: '媒体', profile: { O: 70, C: 70, E: 90, A: 80, N: 45 }, quote: '把你受伤的经历变成智慧' },
+  { name: '马斯克', title: '科技企业家', field: '科技', profile: { O: 90, C: 75, E: 70, A: 30, N: 60 }, quote: '当某件事足够重要，你就去做它，即使胜算不大' },
+  { name: '梵高', title: '后印象派画家', field: '艺术', profile: { O: 95, C: 40, E: 25, A: 55, N: 85 }, quote: '我梦想着绘画，然后我画下了我的梦' },
+  { name: '曼德拉', title: '反种族隔离领袖', field: '政治', profile: { O: 60, C: 80, E: 65, A: 85, N: 25 }, quote: '勇敢不是没有恐惧，而是战胜恐惧' },
+  { name: '贝多芬', title: '作曲家', field: '音乐', profile: { O: 90, C: 70, E: 35, A: 30, N: 75 }, quote: '我要扼住命运的咽喉' },
+  { name: '特蕾莎修女', title: '人道主义者', field: '慈善', profile: { O: 45, C: 80, E: 50, A: 95, N: 40 }, quote: '我们无法做伟大的事，只能用伟大的爱做小事' },
+  { name: '达尔文', title: '生物学家', field: '科学', profile: { O: 85, C: 85, E: 20, A: 65, N: 50 }, quote: '存活下来的物种不是最强壮的，也不是最聪明的，而是最能适应变化的' },
+  { name: '毕加索', title: '现代艺术先驱', field: '艺术', profile: { O: 95, C: 50, E: 70, A: 25, N: 55 }, quote: '每个孩子都是艺术家，问题是如何在长大后仍保持' },
+  { name: '巴菲特', title: '投资家', field: '金融', profile: { O: 50, C: 90, E: 55, A: 65, N: 20 }, quote: '别人贪婪时我恐惧，别人恐惧时我贪婪' },
+  { name: '弗洛伊德', title: '精神分析创始人', field: '心理学', profile: { O: 85, C: 75, E: 40, A: 35, N: 60 }, quote: '梦是通往潜意识的皇家大道' },
+  { name: '马拉拉', title: '教育活动家', field: '社会运动', profile: { O: 65, C: 80, E: 70, A: 85, N: 40 }, quote: '一个孩子、一位教师、一本书和一支笔可以改变世界' },
+  { name: '图灵', title: '计算机科学之父', field: '科学', profile: { O: 90, C: 80, E: 15, A: 45, N: 55 }, quote: '有时候正是那些无人看好的人，成就了无人能及的成就' },
+  { name: '可可·香奈儿', title: '时尚设计师', field: '时尚', profile: { O: 80, C: 70, E: 60, A: 25, N: 50 }, quote: '时尚易逝，风格永存' },
+  { name: '霍金', title: '理论物理学家', field: '科学', profile: { O: 90, C: 75, E: 30, A: 55, N: 35 }, quote: '无论生活看起来有多糟糕，总有你能做并且成功的事' },
+  { name: '林肯', title: '美国总统', field: '政治', profile: { O: 60, C: 70, E: 55, A: 75, N: 55 }, quote: '我走得很慢，但我从不后退' },
+];
+
+function matchCelebrities(scores: DomainScores): CelebrityMatch[] {
+  const domainList: Domain[] = ['O', 'C', 'E', 'A', 'N'];
+  const userScores: Record<Domain, number> = {
+    O: scores.openness,
+    C: scores.conscientiousness,
+    E: scores.extraversion,
+    A: scores.agreeableness,
+    N: scores.neuroticism,
+  };
+
+  const matches = CELEBRITY_PROFILES.map((celeb) => {
+    // 欧氏距离计算相似度
+    let sumSqDiff = 0;
+    let closestDomain: Domain = 'O';
+    let closestDiff = Infinity;
+
+    for (const d of domainList) {
+      const diff = userScores[d] - celeb.profile[d];
+      sumSqDiff += diff * diff;
+      if (Math.abs(diff) < closestDiff) {
+        closestDiff = Math.abs(diff);
+        closestDomain = d;
+      }
+    }
+
+    // 将欧氏距离转换为相似度分数 (0-100)
+    // 最大可能距离 ≈ sqrt(5 * 100^2) ≈ 223.6
+    const maxDist = 223.6;
+    const similarity = Math.round(Math.max(0, (1 - Math.sqrt(sumSqDiff) / maxDist) * 100));
+
+    // 生成相似原因
+    const domainNames: Record<Domain, string> = { O: '开放性', C: '尽责性', E: '外向性', A: '宜人性', N: '情绪敏感性' };
+    const closeTraits: string[] = [];
+    for (const d of domainList) {
+      if (Math.abs(userScores[d] - celeb.profile[d]) <= 15) {
+        const level = userScores[d] > 60 ? '高' : userScores[d] < 40 ? '低' : '中等';
+        closeTraits.push(`${level}${domainNames[d]}`);
+      }
+    }
+    const reason = closeTraits.length > 0
+      ? `你们在${closeTraits.join('、')}上高度相似`
+      : `你们的人格结构有相似的轮廓模式`;
+
+    return {
+      name: celeb.name,
+      title: celeb.title,
+      field: celeb.field,
+      similarity,
+      reason,
+      quote: celeb.quote,
+    };
+  });
+
+  return matches.sort((a, b) => b.similarity - a.similarity).slice(0, 5);
+}
+
+// ─── 情绪效价分析 ───
+
+export interface EmotionalProfile {
+  positivity: number;        // 正面情绪倾向 0-100
+  negativity: number;        // 负面情绪倾向 0-100
+  emotionalRange: number;    // 情绪波动幅度 0-100
+  emotionalResilience: number; // 情绪恢复力 0-100
+  dominantEmotion: string;   // 主导情绪基调
+  emotionalPattern: string;  // 情绪模式描述
+  emotionalStrengths: string[];  // 情绪优势
+  emotionalChallenges: string[]; // 情绪挑战
+}
+
+function buildEmotionalProfile(scores: DomainScores, facetProfiles: FacetProfile[]): EmotionalProfile {
+  const N = scores.neuroticism;
+  const E = scores.extraversion;
+  const A = scores.agreeableness;
+  const O = scores.openness;
+
+  // 正面情绪倾向：高E高A低N → 高正面性
+  const positivity = Math.round(
+    Math.min(100, Math.max(0,
+      30 + (E - 50) * 0.35 + (A - 50) * 0.25 + (50 - N) * 0.4
+    ))
+  );
+
+  // 负面情绪倾向：高N低E → 高负面性
+  const negativity = Math.round(
+    Math.min(100, Math.max(0,
+      30 + (N - 50) * 0.45 + (50 - E) * 0.2 + (50 - A) * 0.1
+    ))
+  );
+
+  // 情绪波动幅度：高N高O → 大波动
+  const emotionalRange = Math.round(
+    Math.min(100, Math.max(0,
+      30 + (N - 50) * 0.35 + (O - 50) * 0.2 + Math.abs(E - 50) * 0.15
+    ))
+  );
+
+  // 情绪恢复力：低N高C高E → 高恢复力
+  const emotionalResilience = Math.round(
+    Math.min(100, Math.max(0,
+      50 + (50 - N) * 0.4 + (scores.conscientiousness - 50) * 0.2 + (E - 50) * 0.15
+    ))
+  );
+
+  // 主导情绪基调
+  let dominantEmotion = '';
+  let emotionalPattern = '';
+  const emotionalStrengths: string[] = [];
+  const emotionalChallenges: string[] = [];
+
+  if (N > 65 && E < 40) {
+    dominantEmotion = '内省忧郁型';
+    emotionalPattern = '你的情绪世界深沉而内敛，倾向于在内心消化情感体验。你比大多数人更容易感受到焦虑和忧伤，但这同时也赋予你深度的情感洞察力。你的情绪像深海——表面平静，内里暗流涌动。';
+    emotionalStrengths.push('深度情感体验', '丰富的内在世界', '艺术感受力强');
+    emotionalChallenges.push('容易陷入负面情绪循环', '情绪恢复较慢', '可能过度内化他人情绪');
+  } else if (N > 65 && E > 60) {
+    dominantEmotion = '激情澎湃型';
+    emotionalPattern = '你同时拥有高情绪敏感性和强表达欲，这意味着你的情绪体验既强烈又外显。你可能在短时间内经历从狂喜到沮丧的剧烈波动。你的情绪像火山——能量巨大，既能创造也能破坏。';
+    emotionalStrengths.push('情感表达力强', '感染力强', '热情驱动行动');
+    emotionalChallenges.push('情绪波动剧烈', '可能冲动行事', '情绪消耗大');
+  } else if (N < 35 && E > 60) {
+    dominantEmotion = '阳光积极型';
+    emotionalPattern = '你情绪稳定且外向，天生倾向于积极解读事件。你不容易被负面情绪困扰，且善于用乐观感染他人。你的情绪像晴空——明亮、开阔、令人舒适。';
+    emotionalStrengths.push('天然乐观倾向', '情绪稳定', '社交能量充沛');
+    emotionalChallenges.push('可能忽视负面信号', '对他人痛苦理解不足', '深度情感连接可能较浅');
+  } else if (N < 35 && E < 40) {
+    dominantEmotion = '沉静平和型';
+    emotionalPattern = '你情绪稳定且内敛，很少大起大落。你不追求强烈的情感刺激，而是在平静中获得满足。你的情绪像湖水——表面波澜不惊，深处自有节奏。';
+    emotionalStrengths.push('情绪自控力强', '不易被干扰', '冷静判断');
+    emotionalChallenges.push('可能压抑真实感受', '情感表达不足', '他人可能觉得你冷漠');
+  } else if (A > 65 && N > 50) {
+    dominantEmotion = '共情敏感型';
+    emotionalPattern = '你的情绪系统高度面向他人——你不仅感受自己的情绪，还强烈地吸收周围人的情感。这使你成为优秀的倾听者和理解者，但也让你容易情绪过载。';
+    emotionalStrengths.push('深度共情能力', '情感细腻', '人际敏感度高');
+    emotionalChallenges.push('情绪边界模糊', '容易被他人情绪拖累', '情感疲劳');
+  } else {
+    dominantEmotion = '平衡稳健型';
+    emotionalPattern = '你的情绪系统相对平衡，没有极端的倾向。你能在需要时表达情感，也能在必要时克制。这种灵活性让你适应多种情境，但也可能让你缺少鲜明的情感辨识度。';
+    emotionalStrengths.push('情绪灵活性', '适应力强', '理性与感性平衡');
+    emotionalChallenges.push('可能缺乏情感深度', '关键时刻难以抉择', '情感表达不够鲜明');
+  }
+
+  return {
+    positivity,
+    negativity,
+    emotionalRange,
+    emotionalResilience,
+    dominantEmotion,
+    emotionalPattern,
+    emotionalStrengths,
+    emotionalChallenges,
+  };
+}
+
+// ─── 认知风格分析 ───
+
+export interface CognitiveStyle {
+  thinkingMode: string;       // 思维模式名称
+  description: string;        // 详细描述
+  processingStyle: string;    // 信息加工方式
+  creativityIndex: number;    // 创造力指数 0-100
+  analyticalIndex: number;    // 分析力指数 0-100
+  practicalIndex: number;     // 实践力指数 0-100
+  learningStyle: string;      // 学习风格
+  decisionBias: string;       // 决策偏好
+}
+
+function buildCognitiveStyle(scores: DomainScores): CognitiveStyle {
+  const O = scores.openness;
+  const C = scores.conscientiousness;
+  const E = scores.extraversion;
+  const N = scores.neuroticism;
+
+  // 创造力指数：高O驱动，低C释放
+  const creativityIndex = Math.round(
+    Math.min(100, Math.max(0, 20 + O * 0.5 + (100 - C) * 0.15 + (E > 50 ? 5 : 0)))
+  );
+
+  // 分析力指数：高C高O驱动
+  const analyticalIndex = Math.round(
+    Math.min(100, Math.max(0, 20 + C * 0.35 + O * 0.3 + (100 - N) * 0.1))
+  );
+
+  // 实践力指数：高C驱动，高E辅助
+  const practicalIndex = Math.round(
+    Math.min(100, Math.max(0, 20 + C * 0.45 + E * 0.2 + (100 - O) * 0.1))
+  );
+
+  let thinkingMode = '';
+  let description = '';
+  let processingStyle = '';
+  let learningStyle = '';
+  let decisionBias = '';
+
+  if (O > 65 && C > 65) {
+    thinkingMode = '创新执行型思维';
+    description = '你同时具备发散性思维和收敛性执行力——既能产生突破性想法，又能将它们系统化地落地。这是最稀有的认知组合之一，约仅占人群的10%。你的挑战在于两种模式的切换：创意阶段需要放松约束，执行阶段需要严格纪律。';
+    processingStyle = '先发散后收敛：你会先广泛探索可能性，然后选择最优路径深度执行';
+    learningStyle = '探索式学习：你喜欢先理解全局框架，再深入细节，善于跨领域迁移知识';
+    decisionBias = '创意与可行性并重：你追求既创新又可落地的方案';
+  } else if (O > 65 && C < 40) {
+    thinkingMode = '发散探索型思维';
+    description = '你的思维像万花筒——总能看到别人看不到的角度和可能性。你天生抗拒思维定式，喜欢挑战常规假设。你的挑战在于收敛——太多想法同时涌来时，选择和坚持变得困难。';
+    processingStyle = '网状发散：你的思维跳跃性强，一个想法自然引出另一个，形成创意网络';
+    learningStyle = '沉浸式学习：你追随兴趣深入，但可能跳过基础直接进入前沿';
+    decisionBias = '创意优先：你倾向于选择更新颖的方案，即使它更冒险';
+  } else if (O < 40 && C > 65) {
+    thinkingMode = '系统分析型思维';
+    description = '你的思维像精密仪器——逻辑清晰、步骤严谨、结论可靠。你擅长将复杂问题分解为可管理的模块，然后逐一攻克。你的挑战在于跳出框架——当现有方法不奏效时，你需要允许自己尝试非常规路径。';
+    processingStyle = '线性收敛：你从问题出发，按步骤推导，最终得出确定结论';
+    learningStyle = '结构化学习：你偏好有清晰大纲和递进关系的课程，循序渐进';
+    decisionBias = '稳妥优先：你倾向于选择经过验证的方案，避免不必要的风险';
+  } else if (O > 65 && N > 60) {
+    thinkingMode = '直觉洞察型思维';
+    description = '你的思维融合了高开放性和高敏感度——你不仅能感知微妙的模式和关联，还能将这些直觉转化为深刻见解。许多突破性发现来自这种认知风格。你的挑战在于验证——直觉虽强，但需要逻辑和证据来支撑。';
+    processingStyle = '直觉驱动：你先有整体感觉，再反向寻找逻辑支撑';
+    learningStyle = '体验式学习：你需要亲身感受和经历，抽象理论不如实际案例有效';
+    decisionBias = '直觉优先：你相信自己的第六感，即使数据不完全支持';
+  } else if (E > 60 && C > 55) {
+    thinkingMode = '行动驱动型思维';
+    description = '你通过行动来思考——与其在脑中反复推演，不如先做起来看效果。你的优势在于快速迭代和实战学习，你的认知在行动中不断优化。你的挑战在于反思——有时需要在行动前暂停，审视全局。';
+    processingStyle = '试错迭代：你快速尝试，从反馈中学习，逐步逼近最优解';
+    learningStyle = '做中学：你通过实践和实验来理解，纯理论学习效率较低';
+    decisionBias = '速度优先：你偏好快速决策和行动，宁可边做边调整';
+  } else {
+    thinkingMode = '灵活适应型思维';
+    description = '你的认知风格灵活多变，能根据情境需要切换不同的思维模式。面对创意需求时你能发散，面对执行需求时你能收敛。这种适应性是你的核心优势，但也意味着你可能缺少一种鲜明的认知标识。';
+    processingStyle = '情境切换：你会根据任务性质自动调整思维方式';
+    learningStyle = '混合式学习：你能适应多种学习方式，根据内容选择最有效的策略';
+    decisionBias = '情境依赖：你的决策风格随情境变化，没有固定的偏好';
+  }
+
+  return {
+    thinkingMode,
+    description,
+    processingStyle,
+    creativityIndex,
+    analyticalIndex,
+    practicalIndex,
+    learningStyle,
+    decisionBias,
+  };
+}
+
+// ─── 压力响应模式 ───
+
+export interface StressResponse {
+  stressType: string;         // 压力类型名称
+  description: string;        // 详细描述
+  stressTriggers: string[];   // 压力触发因素
+  copingMechanism: string;    // 应对机制
+  recoveryStyle: string;      // 恢复方式
+  burnoutRisk: number;        // 倦怠风险 0-100
+  resilienceFactors: string[]; // 韧性因素
+  vulnerabilityFactors: string[]; // 脆弱因素
+}
+
+function buildStressResponse(scores: DomainScores): StressResponse {
+  const N = scores.neuroticism;
+  const C = scores.conscientiousness;
+  const E = scores.extraversion;
+  const A = scores.agreeableness;
+  const O = scores.openness;
+
+  // 倦怠风险：高N高C → 高风险
+  const burnoutRisk = Math.round(
+    Math.min(100, Math.max(0, 20 + N * 0.35 + C * 0.2 + (100 - E) * 0.15 + (A > 60 ? 10 : 0)))
+  );
+
+  let stressType = '';
+  let description = '';
+  const stressTriggers: string[] = [];
+  let copingMechanism = '';
+  let recoveryStyle = '';
+  const resilienceFactors: string[] = [];
+  const vulnerabilityFactors: string[] = [];
+
+  if (N > 65 && C > 60) {
+    stressType = '过度承担型';
+    description = '你是那种在压力下更加拼命的人——焦虑驱动你加倍努力，而努力又不能完全消除焦虑，形成恶性循环。你的尽责性让你无法降低标准，你的情绪敏感性让你对每一个可能的失败都高度警觉。';
+    stressTriggers.push('完美主义标准', '无法委托他人', '截止日期压力', '对失败的恐惧');
+    copingMechanism = '你倾向于通过加倍努力来应对压力，短期内有效但长期可能导致倦怠';
+    recoveryStyle = '你需要学会"足够好"的标准，刻意安排休息而非等到崩溃才停下';
+    resilienceFactors.push('高执行力确保问题不会堆积', '责任心让你主动面对而非逃避');
+    vulnerabilityFactors.push('焦虑-努力循环难以打破', '忽视身体信号直到过度疲劳', '难以向他人求助');
+  } else if (N > 65 && C < 40) {
+    stressType = '焦虑瘫痪型';
+    description = '压力来临时，你的情绪反应强烈但行动力下降——你清楚地感受到焦虑，却难以启动有效的应对行为。拖延不是懒惰，而是焦虑导致的行动冻结。';
+    stressTriggers.push('不确定性', '缺乏清晰结构', '社交评价', '多重任务并行');
+    copingMechanism = '你倾向于回避或拖延压力源，短期内减轻焦虑但长期使问题恶化';
+    recoveryStyle = '将大任务拆解为极小的步骤（5分钟即可完成），用微行动打破焦虑冻结';
+    resilienceFactors.push('高敏感度让你及早察觉问题', '创造力可能提供非常规解决方案');
+    vulnerabilityFactors.push('回避行为使问题积累', '焦虑与拖延形成恶性循环', '缺乏结构加剧失控感');
+  } else if (N < 35 && C > 65) {
+    stressType = '稳健抗压型';
+    description = '你天生情绪稳定，加上高尽责性，使你成为压力环境中的定海神针。你不容易被情绪干扰判断，且总能制定出系统的应对方案。但你的盲区在于——你可能低估了压力对他人和自己的隐性影响。';
+    stressTriggers.push('他人不靠谱的行为', '计划被打乱', '低效的流程', '不公平的待遇');
+    copingMechanism = '你通过制定计划和采取行动来控制压力源，系统化地消除不确定性';
+    recoveryStyle = '你通过恢复秩序和控制感来减压，运动和规律作息是你的天然恢复方式';
+    resilienceFactors.push('情绪稳定是最大的抗压资本', '系统化思维让你高效解决问题', '规律的生活习惯提供稳定基础');
+    vulnerabilityFactors.push('可能忽视情绪信号直到身体发出警告', '对他人情绪反应缺乏共情', '过度依赖控制感');
+  } else if (N < 35 && E > 60) {
+    stressType = '社交缓冲型';
+    description = '你通过社交互动来消化压力——找人聊天、集体运动、团队活动都是你的减压方式。你的情绪稳定性确保你不会在社交中过度发泄，而是真正地从中获得能量。';
+    stressTriggers.push('长时间独处', '社交隔离', '缺乏新鲜刺激', '重复枯燥的工作');
+    copingMechanism = '你通过社交和活动来分散注意力并重新获得能量，然后更有效地面对问题';
+    recoveryStyle = '社交活动、运动、新体验是你的充电方式，独处反而可能让你更焦虑';
+    resilienceFactors.push('广泛的社交网络提供支持', '积极情绪是天然缓冲', '行动力强不易陷入反刍');
+    vulnerabilityFactors.push('可能回避独处和深度反思', '社交依赖可能在隔离期成为弱点', '可能用忙碌逃避核心问题');
+  } else if (A > 65 && N > 50) {
+    stressType = '共情过载型';
+    description = '你的压力很大一部分来自他人——你不仅承受自己的压力，还吸收周围人的焦虑和痛苦。你的高宜人性让你难以拒绝他人的请求，导致你经常超载。';
+    stressTriggers.push('他人的痛苦和需求', '冲突和对抗', '无法帮助他人', '被误解或被利用');
+    copingMechanism = '你倾向于优先处理他人的需求，通过帮助他人来获得控制感，但往往忽视自己';
+    recoveryStyle = '你需要刻意建立"情绪隔离区"——独处时间、冥想、自然接触来清理他人情绪';
+    resilienceFactors.push('深度的人际连接提供情感支持', '助人行为带来意义感', '直觉敏锐能及早发现问题');
+    vulnerabilityFactors.push('情绪边界薄弱', '过度迁就导致自我牺牲', '难以说"不"导致过载');
+  } else {
+    stressType = '灵活适应型';
+    description = '你在压力下相对灵活，能根据压力源的性质调整应对策略。你没有极端的压力反应模式，这意味着你不太可能在某一类压力下崩溃，但也缺少特别强大的抗压优势。';
+    stressTriggers.push('超出常规的极端压力', '多重压力同时袭来', '缺乏恢复时间');
+    copingMechanism = '你会根据情境灵活选择应对方式——有时行动，有时等待，有时寻求帮助';
+    recoveryStyle = '你需要多样化的恢复方式，单一策略可能不够，结合运动、社交和独处效果最佳';
+    resilienceFactors.push('灵活性让你适应不同压力', '没有极端的脆弱点', '能从多种策略中选择');
+    vulnerabilityFactors.push('缺少突出的抗压优势', '极端压力下可能犹豫不决', '需要更长时间找到最佳策略');
+  }
+
+  return {
+    stressType,
+    description,
+    stressTriggers,
+    copingMechanism,
+    recoveryStyle,
+    burnoutRisk,
+    resilienceFactors,
+    vulnerabilityFactors,
+  };
+}
+
+// ─── 决策风格 ───
+
+export interface DecisionStyle {
+  style: string;              // 决策风格名称
+  description: string;        // 详细描述
+  informationPreference: string; // 信息偏好
+  riskTolerance: number;      // 风险容忍度 0-100
+  speedBias: string;          // 速度偏好
+  groupInfluence: string;     // 群体影响
+  blindSpots: string[];       // 盲点
+  optimizationTip: string;    // 优化建议
+}
+
+function buildDecisionStyle(scores: DomainScores): DecisionStyle {
+  const O = scores.openness;
+  const C = scores.conscientiousness;
+  const E = scores.extraversion;
+  const A = scores.agreeableness;
+  const N = scores.neuroticism;
+
+  // 风险容忍度：高O低N高E → 高风险容忍
+  const riskTolerance = Math.round(
+    Math.min(100, Math.max(0, 30 + (O - 50) * 0.25 + (50 - N) * 0.25 + (E - 50) * 0.15 + (50 - A) * 0.1))
+  );
+
+  let style = '';
+  let description = '';
+  let informationPreference = '';
+  let speedBias = '';
+  let groupInfluence = '';
+  const blindSpots: string[] = [];
+  let optimizationTip = '';
+
+  if (C > 65 && N > 55) {
+    style = '审慎分析型';
+    description = '你做决策时极其谨慎——收集大量信息、评估所有风险、反复推敲利弊。你的决策质量通常很高，但代价是速度。在快速变化的环境中，过度分析可能让你错失窗口期。';
+    informationPreference = '全面详尽：你偏好收集所有可得信息，建立完整的决策依据链';
+    speedBias = '慢而稳：你宁愿多花时间确保正确，也不愿匆忙决定后后悔';
+    groupInfluence = '你会听取他人意见但最终依赖自己的分析，他人主要作为信息源而非决策影响者';
+    blindSpots.push('分析瘫痪——信息越多越难决定', '可能过度关注风险而忽视机会', '完美主义导致决策延迟');
+    optimizationTip = '设定决策截止时间，采用"70%信息即行动"原则——完美信息不存在，及时决策比完美决策更重要';
+  } else if (C > 65 && N < 35) {
+    style = '系统决断型';
+    description = '你既有系统化分析的能力，又有果断执行的魄力。你建立决策框架，快速填充关键信息，然后自信地做出判断。这是最高效的决策风格之一，但可能在需要更多同理心的决策中显得冷硬。';
+    informationPreference = '关键指标优先：你关注核心数据点，不被次要信息干扰';
+    speedBias = '高效精准：你快速建立分析框架，高效得出结论';
+    groupInfluence = '你主导决策过程，他人意见作为参考数据纳入你的框架';
+    blindSpots.push('可能忽视无法量化的因素（情感、直觉）', '对他人决策速度缺乏耐心', '框架外的信息可能被过滤掉');
+    optimizationTip = '在涉及人的决策中，刻意纳入"感受"维度——不是所有重要因素都能被量化';
+  } else if (E > 60 && O > 60) {
+    style = '直觉创新型';
+    description = '你信任自己的直觉，且直觉往往很准——高开放性赋予你敏锐的模式识别能力，高外向性让你在行动中验证假设。你的决策风格大胆而富有创造力，但可能在需要严谨论证的场合显得不够扎实。';
+    informationPreference = '模式与趋势：你关注大局和趋势，细节留给执行阶段处理';
+    speedBias = '快速试错：你偏好快速决策、快速验证、快速调整';
+    groupInfluence = '你享受集体头脑风暴，但最终信任自己的判断';
+    blindSpots.push('可能忽视反面证据', '直觉偏差难以自我检测', '快速决策可能遗漏关键细节');
+    optimizationTip = '为直觉决策增加一个"魔鬼代言人"环节——刻意寻找反对意见，确保直觉经过挑战';
+  } else if (A > 65 && E > 55) {
+    style = '共识驱动型';
+    description = '你倾向于通过协商和共识来做决策——你重视每个人的意见，追求所有人都能接受的方案。这使你在团队中极受欢迎，但可能导致决策妥协化——最优方案被折中方案取代。';
+    informationPreference = '多元视角：你主动收集不同立场的信息，确保各方声音被听到';
+    speedBias = '适中但偏慢：你需要时间协调各方意见，达成共识需要耐心';
+    groupInfluence = '高度受群体影响——他人的意见和感受是你决策的核心输入';
+    blindSpots.push('过度妥协导致方案平庸化', '回避必要冲突', '可能牺牲效率追求和谐');
+    optimizationTip = '区分"需要共识的决策"和"需要最优解的决策"——后者应该基于数据和逻辑，而非投票';
+  } else if (O < 40 && C < 40) {
+    style = '即兴反应型';
+    description = '你偏好凭当下的感觉做决定，不喜欢复杂的分析过程。你的优势在于速度和灵活，能在瞬息万变的情境中快速反应。但缺乏系统分析可能导致重复犯错。';
+    informationPreference = '当下可得：你使用手边的信息快速判断，不做深度调研';
+    speedBias = '极快：你几乎凭本能反应，决策速度是你的优势';
+    groupInfluence = '你容易受当下社交环境影响，尤其是权威人物或强势意见';
+    blindSpots.push('缺乏长期视角', '可能重复相同错误', '容易受框架效应影响');
+    optimizationTip = '为重要决策建立简单的检查清单——不需要复杂分析，但需要确保关键因素不被遗漏';
+  } else {
+    style = '情境适应型';
+    description = '你的决策风格随情境灵活调整——小事快速决定，大事审慎分析；技术问题靠逻辑，人的问题靠共情。这种灵活性让你在多数场景下表现良好，但可能在极端压力下缺少默认模式。';
+    informationPreference = '按需收集：你根据决策重要性调整信息收集深度';
+    speedBias = '因情境而异：你在不同场景下展现不同的速度偏好';
+    groupInfluence = '适度——你会参考他人意见但保持独立判断';
+    blindSpots.push('缺少一致的决策框架', '可能在高压下犹豫', '不同情境的决策标准可能矛盾');
+    optimizationTip = '建立一套个人决策原则——不是死板规则，而是在压力下能快速启发的思维捷径';
+  }
+
+  return {
+    style,
+    description,
+    informationPreference,
+    riskTolerance,
+    speedBias,
+    groupInfluence,
+    blindSpots,
+    optimizationTip,
+  };
+}
+
 // ─── 主入口：完整人格建模 ───
 
 export function buildPersonalityModel(scores: DomainScores): PersonalityModel {
@@ -618,6 +1099,11 @@ export function buildPersonalityModel(scores: DomainScores): PersonalityModel {
   const relationshipDynamics = buildRelationshipDynamics(scores);
   const dominantTraits = identifyDominantTraits(scores, facetProfiles);
   const growthEdge = identifyGrowthEdge(scores, facetProfiles);
+  const celebrityMatches = matchCelebrities(scores);
+  const emotionalProfile = buildEmotionalProfile(scores, facetProfiles);
+  const cognitiveStyle = buildCognitiveStyle(scores);
+  const stressResponse = buildStressResponse(scores);
+  const decisionStyle = buildDecisionStyle(scores);
 
   return {
     scores,
@@ -627,5 +1113,10 @@ export function buildPersonalityModel(scores: DomainScores): PersonalityModel {
     relationshipDynamics,
     dominantTraits,
     growthEdge,
+    celebrityMatches,
+    emotionalProfile,
+    cognitiveStyle,
+    stressResponse,
+    decisionStyle,
   };
 }
