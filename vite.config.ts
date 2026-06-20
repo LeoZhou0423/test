@@ -9,6 +9,11 @@ export default defineConfig({
   build: {
     sourcemap: 'hidden',
   },
+  server: {
+    watch: {
+      ignored: ['**/.pnpm-store/**', '**/node_modules/**', '**/dist/**'],
+    },
+  },
   plugins: [
     react({
       babel: {
