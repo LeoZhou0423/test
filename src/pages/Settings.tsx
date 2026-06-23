@@ -1,10 +1,14 @@
-import { Moon, Sun, Type, Download, Trash2, BookOpen, Github } from 'lucide-react';
+import { useState } from 'react';
+import { Moon, Sun, Type, Download, Trash2, BookOpen, Github, Key, Eye, EyeOff } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { REFERENCES } from '@/data/descriptions';
 import { exportDataToJSON } from '@/utils/export';
 
 export function Settings() {
   const { settings, updateSettings, history, clearHistory } = useAppStore();
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState(settings.mimoApiKey);
+  const [baseUrlInput, setBaseUrlInput] = useState(settings.mimoBaseUrl);
 
   const handleExportData = () => {
     exportDataToJSON(
@@ -87,6 +91,72 @@ export function Settings() {
                     {size === 'small' ? '小' : size === 'medium' ? '中' : '大'}
                   </button>
                 ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* AI API Configuration */}
+        <section className="mt-8">
+          <h2 className="font-display text-sm font-bold uppercase tracking-[0.2em] text-[var(--text-secondary)]">
+            AI 配置
+          </h2>
+          <div className="mt-4 bauhaus-card-sm p-6">
+            <div className="flex items-start gap-3">
+              <Key size={20} className="mt-0.5" />
+              <div className="flex-1">
+                <p className="font-medium">Mimo API Key</p>
+                <p className="text-xs text-[var(--text-secondary)]">
+                  用于 AI 深度解读功能，支持流式输出
+                </p>
+                <div className="mt-4 flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type={showApiKey ? 'text' : 'password'}
+                      value={apiKeyInput}
+                      onChange={(e) => setApiKeyInput(e.target.value)}
+                      placeholder="输入你的 Mimo API Key"
+                      className="w-full border-2 border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 pr-10 text-sm"
+                    />
+                    <button
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    >
+                      {showApiKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => updateSettings({ mimoApiKey: apiKeyInput })}
+                    className="bauhaus-btn-secondary px-4 py-2 text-sm"
+                  >
+                    保存
+                  </button>
+                </div>
+
+                <div className="mt-4">
+                  <p className="text-xs text-[var(--text-secondary)]">API Base URL</p>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      type="text"
+                      value={baseUrlInput}
+                      onChange={(e) => setBaseUrlInput(e.target.value)}
+                      placeholder="https://api.mimo.ai/v1"
+                      className="flex-1 border-2 border-[var(--border-color)] bg-[var(--bg-primary)] px-3 py-2 text-sm"
+                    />
+                    <button
+                      onClick={() => updateSettings({ mimoBaseUrl: baseUrlInput })}
+                      className="bauhaus-btn-secondary px-4 py-2 text-sm"
+                    >
+                      保存
+                    </button>
+                  </div>
+                </div>
+
+                {settings.mimoApiKey && (
+                  <p className="mt-3 text-xs text-emerald-600">
+                    ✓ API Key 已配置，AI 深度解读功能可用
+                  </p>
+                )}
               </div>
             </div>
           </div>

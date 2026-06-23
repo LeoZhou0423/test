@@ -12,6 +12,8 @@ export interface TestRecord {
 export interface AppSettings {
   darkMode: boolean;
   fontSize: 'small' | 'medium' | 'large';
+  mimoApiKey: string;
+  mimoBaseUrl: string;
 }
 
 interface AppState {
@@ -41,6 +43,8 @@ export const useAppStore = create<AppState>()(
       settings: {
         darkMode: false,
         fontSize: 'medium',
+        mimoApiKey: '',
+        mimoBaseUrl: 'https://api.mimo.ai/v1',
       },
 
       setAnswer: (questionId, value) =>

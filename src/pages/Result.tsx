@@ -5,14 +5,13 @@ import { RadarChart } from '@/components/RadarChart';
 import { DomainCard } from '@/components/DomainCard';
 import { FacetAccordion } from '@/components/FacetAccordion';
 import { ArchetypeCard } from '@/components/ArchetypeCard';
-import { PersonalityNarrative } from '@/components/PersonalityNarrative';
+import { AINarrative } from '@/components/AINarrative';
 import { FeedbackButton } from '@/components/FeedbackButton';
 import { useAppStore } from '@/store/useAppStore';
 import { DOMAINS, type Domain } from '@/data/questions';
 import { OVERVIEW_ADVICE } from '@/data/descriptions';
 import { matchArchetype } from '@/data/archetypes';
 import { detectTensions } from '@/utils/tension';
-import { generateNarrative } from '@/utils/narrative';
 import { exportElementToImage, exportElementToPDF, shareElementImage } from '@/utils/export';
 
 const DOMAIN_ORDER: Domain[] = ['O', 'C', 'E', 'A', 'N'];
@@ -46,7 +45,6 @@ export function Result() {
   };
 
   const archetype = matchArchetype(scoresMap);
-  const narrative = generateNarrative(scores);
   const tensions = detectTensions(scoresMap);
 
   const dateStr = new Date(record.createdAt).toLocaleString('zh-CN', {
@@ -116,9 +114,9 @@ export function Result() {
               <ArchetypeCard archetype={archetype} />
             </div>
 
-            {/* Personality Narrative */}
+            {/* AI Narrative - Streaming */}
             <div className="mt-5 sm:mt-6">
-              <PersonalityNarrative narrative={narrative} />
+              <AINarrative scores={scores} />
             </div>
 
             {/* Feedback Button */}
