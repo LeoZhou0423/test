@@ -51,49 +51,128 @@ export function AINarrative({ scores, className }: AINarrativeProps) {
     }
   }, [settings.mimoApiKey, content, isLoading, error, startStream]);
 
-  // Parse markdown-like headers
+  // Parse markdown content
   const renderContent = (text: string) => {
-    return text.split('\n').map((line, i) => {
-      if (line.startsWith('## ')) {
-        return (
+    const lines = text.split('\n');
+    const elements: React.ReactNode[] = [];
+    let currentList: string[] = [];
+
+    const flushList = () => {
+      if (currentList.length > 0) {
+        elements.push(
+          <ul key={`list-${elements.length}`} className="list-disc pl-5 space-y-1 my-2">
+            {currentList.map((item, idx) => (
+              <li key={idx} className="text-sm leading-relaxed sm:text-base">
+                {renderInline(item)}
+              </li>
+            ))}
+          </ul>
+        );
+        currentList = [];
+      }
+    };
+
+    const renderInline = (line: string) => {
+      // Handle bold, italic, and inline code
+      const parts: React.ReactNode[] = [];
+      let remaining = line;
+      let key = 0;
+
+      while (remaining.length > 0) {
+        // Bold: **text**
+        const boldMatch = remaining.match(/^(.*?)\*\*(.*?)\*\*(.*)/s);
+        if (boldMatch) {
+          if (boldMatch[1]) parts.push(boldMatch[1]);
+          parts.push(
+            <strong key={key++} className="font-semibold text-[var(--text-primary)]">
+              {boldMatch[2]}
+            </strong>
+          );
+          remaining = boldMatch[3];
+          continue;
+        }
+
+        // Italic: *text*
+        const italicMatch = remaining.match(/^(.*?)\*(.*?)\*(.*)/s);
+        if (italicMatch) {
+          if (italicMatch[1]) parts.push(italicMatch[1]);
+          parts.push(
+            <em key={key++} className="italic">{italicMatch[2]}</em>
+          );
+          remaining = italicMatch[3];
+          continue;
+        }
+
+        // No more formatting
+        parts.push(remaining);
+        break;
+      }
+
+      return parts.length === 1 ? parts[0] : parts;
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // Empty line
+      if (trimmed === '') {
+        flushList();
+        continue;
+      }
+
+      // Header: ## text
+      if (trimmed.startsWith('## ')) {
+        flushList();
+        elements.push(
           <h3
-            key={i}
-            className="font-display text-base font-bold uppercase tracking-wide mt-6 first:mt-0 sm:text-lg"
+            key={`h3-${i}`}
+            className="font-display text-lg font-bold uppercase tracking-wide mt-6 first:mt-0 mb-2 sm:text-xl"
           >
-            {line.slice(3)}
+            {trimmed.slice(3)}
           </h3>
         );
+        continue;
       }
-      if (line.startsWith('### ')) {
-        return (
+
+      // Subheader: ### text
+      if (trimmed.startsWith('### ')) {
+        flushList();
+        elements.push(
           <h4
-            key={i}
-            className="font-display text-sm font-bold uppercase tracking-wide mt-4 sm:text-base"
+            key={`h4-${i}`}
+            className="font-display text-base font-bold uppercase tracking-wide mt-4 mb-1 sm:text-lg"
           >
-            {line.slice(4)}
+            {trimmed.slice(4)}
           </h4>
         );
+        continue;
       }
-      if (line.trim() === '') {
-        return <br key={i} />;
+
+      // List item: - text or * text
+      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        currentList.push(trimmed.slice(2));
+        continue;
       }
-      // Bold text
-      const boldRegex = /\*\*(.*?)\*\*/g;
-      const parts = line.split(boldRegex);
-      return (
-        <p key={i} className="text-sm leading-relaxed sm:text-base">
-          {parts.map((part, j) =>
-            j % 2 === 1 ? (
-              <strong key={j} className="font-semibold text-[var(--text-primary)]">
-                {part}
-              </strong>
-            ) : (
-              part
-            )
-          )}
+
+      // Numbered list: 1. text
+      const numberedListMatch = trimmed.match(/^\d+\.\s+(.*)/);
+      if (numberedListMatch) {
+        currentList.push(numberedListMatch[1]);
+        continue;
+      }
+
+      // Regular paragraph
+      flushList();
+      elements.push(
+        <p key={`p-${i}`} className="text-sm leading-relaxed sm:text-base my-2">
+          {renderInline(trimmed)}
         </p>
       );
-    });
+    }
+
+    flushList(); // Flush any remaining list items
+    return elements;
   };
 
   if (!settings.mimoApiKey) {
