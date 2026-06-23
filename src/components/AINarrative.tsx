@@ -8,14 +8,16 @@ import { cn } from '@/lib/utils';
 
 interface AINarrativeProps {
   scores: DomainScores;
+  recordId?: string; // 历史记录 ID，用于保存解读结果
+  savedNarrative?: string; // 已保存的解读结果
   className?: string;
 }
 
-export function AINarrative({ scores, className }: AINarrativeProps) {
-  const { settings } = useAppStore();
-  const [content, setContent] = useState('');
+export function AINarrative({ scores, recordId, savedNarrative, className }: AINarrativeProps) {
+  const { settings, saveNarrative } = useAppStore();
+  const [content, setContent] = useState(savedNarrative || '');
   const [isLoading, setIsLoading] = useState(false);
-  const [isComplete, setIsComplete] = useState(false);
+  const [isComplete, setIsComplete] = useState(!!savedNarrative);
   const [error, setError] = useState<string | null>(null);
 
   const analysis = useMemo(() => analyzeScores(scores), [scores]);
@@ -29,31 +31,39 @@ export function AINarrative({ scores, className }: AINarrativeProps) {
     setIsLoading(true);
     setError(null);
     setContent('');
+    setIsComplete(false);
+
+    let fullContent = '';
 
     await streamAIAnalysis(scores, {
       apiKey: settings.mimoApiKey,
-      baseUrl: settings.mimoBaseUrl || 'https://api.mimo.ai/v1',
-      corsProxy: settings.corsProxy || 'https://corsproxy.io/?',
+      baseUrl: settings.mimoBaseUrl || 'https://token-plan-cn.xiaomimimo.com/v1',
+      corsProxy: settings.corsProxy || undefined,
       onToken: (token) => {
-        setContent((prev) => prev + token);
+        fullContent += token;
+        setContent(fullContent);
       },
       onComplete: () => {
         setIsComplete(true);
         setIsLoading(false);
+        // 保存解读结果到历史记录
+        if (recordId && fullContent) {
+          saveNarrative(recordId, fullContent);
+        }
       },
       onError: (err) => {
         setError(err.message);
         setIsLoading(false);
       },
     });
-  }, [scores, settings.mimoApiKey, settings.mimoBaseUrl]);
+  }, [scores, settings.mimoApiKey, settings.mimoBaseUrl, settings.corsProxy, recordId, saveNarrative]);
 
-  // Auto-start if API key is configured
+  // 如果有已保存的解读，不自动开始
   useEffect(() => {
-    if (settings.mimoApiKey && !content && !isLoading && !error) {
+    if (settings.mimoApiKey && !content && !isLoading && !error && !savedNarrative) {
       startStream();
     }
-  }, [settings.mimoApiKey, content, isLoading, error, startStream]);
+  }, [settings.mimoApiKey, content, isLoading, error, savedNarrative, startStream]);
 
   if (!settings.mimoApiKey) {
     return (
@@ -76,7 +86,7 @@ export function AINarrative({ scores, className }: AINarrativeProps) {
   return (
     <div className={cn('bauhaus-card-sm p-5 sm:p-6', className)}>
       {/* Retest warning */}
-      {analysis.retestMessage && (
+      {analysis.retestMessage && !savedNarrative && (
         <div className={cn(
           'mb-4 p-4 border-2',
           analysis.hasRetestAdvice

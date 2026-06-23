@@ -7,6 +7,7 @@ export interface TestRecord {
   createdAt: number;
   answers: Record<number, number>;
   scores: DomainScores;
+  aiNarrative?: string; // 保存 AI 解读结果
 }
 
 export interface AppSettings {
@@ -28,6 +29,7 @@ interface AppState {
   deleteRecord: (id: string) => void;
   clearHistory: () => void;
   updateSettings: (settings: Partial<AppSettings>) => void;
+  saveNarrative: (id: string, narrative: string) => void;
 }
 
 const STORAGE_KEY = 'big-five-test-storage';
@@ -45,8 +47,8 @@ export const useAppStore = create<AppState>()(
         darkMode: false,
         fontSize: 'medium',
         mimoApiKey: '',
-        mimoBaseUrl: 'https://api.mimo.ai/v1',
-        corsProxy: 'https://corsproxy.io/?',
+        mimoBaseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
+        corsProxy: '',
       },
 
       setAnswer: (questionId, value) =>
@@ -82,6 +84,13 @@ export const useAppStore = create<AppState>()(
       updateSettings: (settings) =>
         set((state) => ({
           settings: { ...state.settings, ...settings },
+        })),
+
+      saveNarrative: (id, narrative) =>
+        set((state) => ({
+          history: state.history.map((r) =>
+            r.id === id ? { ...r, aiNarrative: narrative } : r
+          ),
         })),
     }),
     {

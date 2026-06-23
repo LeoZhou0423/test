@@ -116,7 +116,7 @@ export function Result() {
 
             {/* AI Narrative - Streaming */}
             <div className="mt-5 sm:mt-6">
-              <AINarrative scores={scores} />
+              <AINarrative scores={scores} recordId={record.id} savedNarrative={record.aiNarrative} />
             </div>
 
             {/* Feedback Button */}
