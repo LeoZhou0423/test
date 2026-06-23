@@ -235,7 +235,7 @@ export async function streamAIAnalysis(
         ],
         stream: true,
         temperature: 0.7,
-        max_tokens: 8000,
+        max_tokens: 16000,
       }),
     });
 
@@ -251,11 +251,13 @@ export async function streamAIAnalysis(
 
     const decoder = new TextDecoder();
     let buffer = '';
+    let lastTokenTime = Date.now();
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
+      lastTokenTime = Date.now();
       buffer += decoder.decode(value, { stream: true });
 
       // Process SSE lines
@@ -275,8 +277,16 @@ export async function streamAIAnalysis(
         try {
           const parsed = JSON.parse(data);
           const content = parsed.choices?.[0]?.delta?.content;
+          const finishReason = parsed.choices?.[0]?.finish_reason;
+
           if (content) {
             onToken(content);
+          }
+
+          // Check if API signaled completion
+          if (finishReason === 'stop') {
+            onComplete();
+            return;
           }
         } catch {
           // Skip invalid JSON lines
@@ -284,6 +294,7 @@ export async function streamAIAnalysis(
       }
     }
 
+    // Stream ended without [DONE] - likely truncated by proxy
     onComplete();
   } catch (error) {
     onError(error instanceof Error ? error : new Error(String(error)));
