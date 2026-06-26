@@ -16,6 +16,8 @@ export function Settings() {
   const [resetConfirm, setResetConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const hasBuiltinKey = typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEEPSEEK_API_KEY as string;
+
   const handleExportData = () => {
     exportDataToJSON(
       {
@@ -259,9 +261,12 @@ export function Settings() {
                   </div>
                 </div>
 
-                {(settings.proxyUrl || settings.deepseekApiKey) && (
+                {(settings.proxyUrl || settings.deepseekApiKey || hasBuiltinKey) && (
                   <p className="mt-3 text-xs text-emerald-600">
                     ✓ AI 服务已配置
+                    {hasBuiltinKey && !settings.proxyUrl && !settings.deepseekApiKey
+                      ? '（内建 API Key，开箱即用）'
+                      : ''}
                   </p>
                 )}
               </div>

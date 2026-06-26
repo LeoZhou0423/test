@@ -22,7 +22,11 @@ export function AINarrative({ scores, recordId, savedNarrative, className }: AIN
 
   const analysis = useMemo(() => analyzeScores(scores), [scores]);
 
-  const isConfigured = !!(settings.proxyUrl || settings.deepseekApiKey);
+  const BUILTIN_KEY = typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEEPSEEK_API_KEY
+    ? (import.meta.env.VITE_DEEPSEEK_API_KEY as string)
+    : '';
+
+  const isConfigured = !!(settings.proxyUrl || settings.deepseekApiKey || BUILTIN_KEY);
 
   const startStream = useCallback(async () => {
     if (!isConfigured) {
